@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="z1.xsl"?>
+<response>
+	<temperature>
+		<celsius>272.15</celsius>
+		<sensors>
+			<sensor name="BMP" unit="C">272</sensor>
+			<sensor name="DHT" unit="C">273</sensor>
+		</sensors>
+	</temperature>
+	<humidity>
+		<percentage>46</percentage>
+	</humidity>
+	<pressure>
+		<pa>93310</pa>
+		<mmHg>700</mmHg>
+	</pressure>
+	<illuminance>
+		<lx>32</lx>
+	</illuminance>
+</response>
+
