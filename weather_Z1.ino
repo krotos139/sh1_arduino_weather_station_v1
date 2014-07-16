@@ -1,3 +1,42 @@
+/*
+Author: Iuri Iakovlev <krotos139@gmail.com>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  (Это свободная программа: вы можете перераспространять ее и/или изменять
+   ее на условиях Стандартной общественной лицензии GNU в том виде, в каком
+   она была опубликована Фондом свободного программного обеспечения; либо
+   версии 3 лицензии, либо (по вашему выбору) любой более поздней версии.
+
+   Эта программа распространяется в надежде, что она будет полезной,
+   но БЕЗО ВСЯКИХ ГАРАНТИЙ; даже без неявной гарантии ТОВАРНОГО ВИДА
+   или ПРИГОДНОСТИ ДЛЯ ОПРЕДЕЛЕННЫХ ЦЕЛЕЙ. Подробнее см. в Стандартной
+   общественной лицензии GNU.
+
+   Вы должны были получить копию Стандартной общественной лицензии GNU
+   вместе с этой программой. Если это не так, см.
+   <http://www.gnu.org/licenses/>.)
+*/
+
+// Interfaces
+#define Z1_I_WEB
+#define Z1_I_SERIAL
+#define Z1_I_MODBUS
+
+// Options
+#undef Z1_O_DHCP
+
 #include <Ethernet.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -5,27 +44,34 @@
 #include "BH1750.h"
 #include "Adafruit_BMP085.h"
 #include "LedControl.h"
+
+#ifdef Z1_I_MODBUS
 #include "Mudbus.h"
+#endif
+
+#ifdef Z1_I_WEB
 #include "WebServer.h"
+#endif
 
 #define WEATHER_STATION_Z1 0x20
 
 // ===============================================================
 #define DHT_S1_PIN A0    // пин для датчика DHT22
 // ===============================================================
-// assign a MAC address for the ethernet controller.
-// fill in your address here:
 byte mac[] = { 
   0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-// assign an IP address for the controller:
+
+#ifndef Z1_O_DHCP
 IPAddress ip(192,168,0,20);
 IPAddress gateway(192,168,0,1);	
 IPAddress subnet(255, 255, 255, 0);
+#endif
 // ===============================================================
 float humidity = 0, temp_dht = 0, temp_bmp = 0, temp = 0;
 uint16_t light = 0;
 int32_t pressure_pa = 0, pressure_mm = 0;
 int mode = 0;
+// ===============================================================
 
 dht dht_s1;
 
@@ -36,9 +82,11 @@ Adafruit_BMP085 bmp;
 /* This creates an instance of the webserver.  By specifying a prefix
  * of "", all pages will be at the root of the server. */
 #define PREFIX ""
+#ifdef Z1_I_WEB
 WebServer webserver(PREFIX, 80);
-//EthernetServer webserver(80);
+#endif
 
+#ifdef Z1_I_MODBUS
 #define DEV_ID Mb.R[0]
 #define TEMPERATURE Mb.R[1]
 #define TEMPERATURE_DHT Mb.R[2]
@@ -47,6 +95,7 @@ WebServer webserver(PREFIX, 80);
 #define PRESSURE_MM Mb.R[5]
 #define LIGHT Mb.R[6]
 Mudbus Mb;
+#endif
 
 // pin A5 is connected to the DataIn 
 // pin A6 is connected to the CLK 
@@ -54,19 +103,13 @@ Mudbus Mb;
 LedControl lc=LedControl(A1,A2,A3,1);
 
 // ======================== Web pages ==========================
+#ifdef Z1_I_WEB
 void web_index(WebServer &server, WebServer::ConnectionType type, char *, bool)
 {
-  /* this line sends the standard "we're all OK" headers back to the
-     browser */
   server.httpSuccess("application/xml; charset=utf-8");
 
-  /* if we're handling a GET or POST, we can output our data here.
-     For a HEAD request, we just stop after outputting headers. */
   if (type != WebServer::HEAD)
   {
-    /* this defines some HTML text in read-only memory aka PROGMEM.
-     * This is needed to avoid having the string copied to our limited
-     * amount of RAM. */
     P(index_p1) = 
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<?xml-stylesheet type=\"text/xsl\" href=\"http://192.168.0.20/z1.xsl\"?>"
@@ -96,7 +139,7 @@ void web_index(WebServer &server, WebServer::ConnectionType type, char *, bool)
     P(index_p8) = "</lx>"
       "	</illuminance>"
       "</response>";
-    /* this is a special form of print that outputs from PROGMEM */
+    // this is a special form of print that outputs from PROGMEM 
     server.printP(index_p1);
     server.print(temp);
     server.printP(index_p2);
@@ -200,14 +243,18 @@ void web_z1_xsl(WebServer &server, WebServer::ConnectionType type, char *, bool)
     "</xsl:template>"
     "</xsl:stylesheet>";
 
-    /* this is a special form of print that outputs from PROGMEM */
+    // this is a special form of print that outputs from PROGMEM 
     server.printP(z1_xsl);
   }
 }
+#endif
 
 // ========================СТАРТУЕМ=============================
-// ========================Управляем св.диодом на 4-м пине==========
 void setup(){
+  //enable serial data print
+  Serial.begin(9600); 
+  Serial.println("Weather Z1 v 0.2"); // Тестовые строки для отображения в мониторе порта
+  
   // Init LED display
   lc.shutdown(0,false);
   lc.setIntensity(0,2);
@@ -216,26 +263,34 @@ void setup(){
   lc.setChar(0,6,'O',false);
   lc.setChar(0,5,'A',false);
   lc.setChar(0,4,'d',false);
+  
   //запускаем Ethernet
   SPI.begin();
-  
+#ifdef Z1_O_DHCP
+  Ethernet.begin(mac);
+#else
   Ethernet.begin(mac, ip);
+#endif
+
   // Init Light sensor
   lightMeter.begin();
+  
   // Init pressure sensor
   if (!bmp.begin()) {
     Serial.println("ERROR: BMP085 sensor failed");
   }
-
-  //enable serial datada print
-  Serial.begin(9600); 
-  Serial.println("Weather Z1 v 0.1"); // Тестовые строки для отображения в мониторе порта
   
+#ifdef Z1_O_DHCP
+  Serial.print("IP:");
+  Serial.println(Ethernet.localIP());
+#endif
+
+#ifdef Z1_I_WEB
   webserver.setDefaultCommand(&web_index);
   webserver.addCommand("index.html", &web_index);
   webserver.addCommand("z1.xsl", &web_z1_xsl);
-  
-  webserver.begin();
+#endif  
+//  webserver.begin();
 }
 
 void loop(){
@@ -246,15 +301,19 @@ void loop(){
 
   Z1_sensors_update();
   
+#ifdef Z1_I_SERIAL
   Z1_SerialOutput();
+#endif
   
   Z1_ledDisplay();
   
+#ifdef Z1_I_MODBUS
   Z1_modbus_tcp_slave();
-  
-//  Z1_http_server();
+#endif
 
+#ifdef Z1_I_WEB
   webserver.processConnection(buff, &len);
+#endif
 }
 
 void Z1_sensors_update() {
@@ -375,17 +434,17 @@ void Z1_ledDisplay() {
   }
 }
 
+#ifdef Z1_I_MODBUS
 void Z1_modbus_tcp_slave() {
   Mb.Run();
 
   DEV_ID = WEATHER_STATION_Z1;
-  TEMPERATURE = temp*10;
-  TEMPERATURE_DHT = temp_dht*10;
-  TEMPERATURE_BMP = temp_bmp*10;
-  HUMIDITY = humidity*10;
+  TEMPERATURE = temp;
+  TEMPERATURE_DHT = temp_dht;
+  TEMPERATURE_BMP = temp_bmp;
+  HUMIDITY = humidity;
   PRESSURE_MM = pressure_mm;
   LIGHT = light;
-  
 }
-
+#endif
 
